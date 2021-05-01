@@ -68,7 +68,7 @@ async def get_or_call(key, func, expire=settings.CACHE_LIFE):
             val = await func()
             await loop.run_in_executor(None, cache.set, key, val, expire)
             result = await loop.run_in_executor(None, cache.get, key)
-        return result
+    return result
 
 class Loop(object):
     """docstring for Loop."""
