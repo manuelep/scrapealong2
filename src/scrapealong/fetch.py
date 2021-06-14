@@ -2,6 +2,7 @@
 
 from . import settings
 from .common import logger
+from .helpers import Loop
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -40,9 +41,9 @@ def timeit(func):
         start = datetime.datetime.now()
         result = await func(url, *args, **kwargs)
         end = datetime.datetime.now()
-        elapsed = prettydelta(end-start)
+        elapsed = prettydelta(end-start, use_suffix=False)
         logger.debug(f"""Using method {func.__name__} called url: {url}
-Dwonload time: {elapsed}""")
+Download time: {elapsed}""")
         # logger.info(f"Elapsed time: {elapsed}")
         return result
     return wrapper
@@ -133,6 +134,11 @@ class SlowFetcher(object):
         async with self.semaphoro:
             response = await fetch(url)
         return response
+
+    def __call__(self, *args, **kwargs):
+        with Loop() as loop:
+            res = loop.run_until_complete(self.fetch(*args, **kwargs))
+        return res
 
     # async def browse(self, url):
     #     async with self.semaphoro:
