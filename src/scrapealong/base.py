@@ -83,7 +83,8 @@ class BaseBrowser(object):
                         else:
                             logger.warning(f"Attempt {tt} failed")
                             logger.error(err)
-                            raise
+                            # raise
+                            break
                     else:
                         self.status = response.status
                         if response.status>=400:
