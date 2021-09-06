@@ -10,11 +10,32 @@ import pyppeteer.errors
 from bs4 import BeautifulSoup
 import traceback
 
+from selenium.webdriver import Firefox
+from selenium.webdriver.firefox.options import Options
+import selenium.common.exceptions
+
 FETCH_TIMEOUT = 25.
 BROWSE_TIMEOUT = 25000
-RETRY_WITHIN = 5
+RETRY_WITHIN = 8
 
 parser = lambda body: BeautifulSoup(body, "html.parser")
+
+import functools
+
+def force_async(fn):
+    ''' Courtesy of: https://gist.github.com/phizaz/20c36c6734878c6ec053245a477572ec
+    turns a sync function to async function using threads
+    '''
+    from concurrent.futures import ThreadPoolExecutor
+    import asyncio
+    pool = ThreadPoolExecutor()
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        future = pool.submit(fn, *args, **kwargs)
+        return asyncio.wrap_future(future)  # make it awaitable
+
+    return wrapper
 
 class ScrapeError(object):
     """docstring for ScrapeError."""
@@ -94,7 +115,45 @@ class BaseBrowser(object):
         self._body = body
         self._load()
 
+    async def _seleniumBrowse(self, retry=5):
+        """
+        """
+
+        opts = Options()
+        opts.set_headless()
+        browser = Firefox(options=opts, timeout=FETCH_TIMEOUT)
+
+        @force_async
+        def calll_url():
+            browser.get(self.url)
+
+        for tt in range(1, retry+1):
+            try:
+                res = await calll_url()
+            except selenium.common.exceptions.TimeoutException as err:
+                if tt < retry:
+                    logger.warning(err)
+                    logger.info(f"Attempt {tt} failed. Fetch will be retryed within {RETRY_WITHIN} sec")
+                    logger.info(self.url)
+                    await asyncio.sleep(RETRY_WITHIN)
+                    continue
+                else:
+                    logger.warning(f"Attempt {tt} failed")
+                    logger.error(err)
+                    break
+            else:
+                html = browser.find_element_by_tag_name('html')
+                self._body = html.get_attribute('outerHTML')
+                break
+
+
     async def _browse(self, retry=5):
+        """
+
+        TODO: Test other solutions like:
+            - https://github.com/HDE/arsenic
+            - https://realpython.com/modern-web-automation-with-python-and-selenium/
+        """
 
         async with browse_semaphoro:
 
@@ -108,9 +167,9 @@ class BaseBrowser(object):
                         logger.warning(err)
                         logger.info(f"Attempt {tt} failed. Fetch will be retryed within {RETRY_WITHIN} sec")
                         logger.info(self.url)
-                        await asyncio.sleep(RETRY_WITHIN)
                         await page.close()
                         await browser.close()
+                        await asyncio.sleep(RETRY_WITHIN)
                         continue
                     else:
                         logger.warning(f"Attempt {tt} failed")
@@ -130,13 +189,20 @@ class BaseBrowser(object):
                 else:
                     self.status = response.status
                     if response.status>=400:
+                        logger.critical(response.status)
                         return
                     else:
-                        await self._page_callback(page)
+                        try:
+                            await self._page_callback(page)
+                        except NotImplementedError:
+                            pass
                     self._body = await page.content()
                     await page.close()
                     await browser.close()
-                    self._load()
+                    try:
+                        self._load()
+                    except NotImplementedError:
+                        pass
                     break
 
     @property

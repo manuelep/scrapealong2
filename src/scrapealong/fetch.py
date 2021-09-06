@@ -20,7 +20,7 @@ import datetime
 
 FETCH_TIMEOUT = 25.
 BROWSE_TIMEOUT = 25000
-RETRY_WITHIN = 3
+RETRY_WITHIN = 25
 
 # # create logger
 # logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ Download time: {elapsed}""")
 parser = lambda body: BeautifulSoup(body, "html.parser")
 
 @timeit
-async def fetchOldButGold(url, retry=3):
+async def fetchOldButGold(url, retry=5):
     """ Fetches the given url and return the parsed page body
     DOC:
         * https://www.crummy.com/software/BeautifulSoup/bs4/doc/
@@ -62,19 +62,22 @@ async def fetchOldButGold(url, retry=3):
         for tt in range(retry):
             try:
                 async with session.get(url) as response:
+                    if response.status>=400:
+                        raise Exception(response.status)
                     body = await response.text()
             except (aiohttp.ClientConnectorError, asyncio.TimeoutError) as err:
+                logger.debug(f"Called URL: {url} - {tt}/{retry}")
                 if tt < retry-1:
                     await asyncio.sleep(RETRY_WITHIN)
                     continue
                 else:
                     raise
             else:
-                if response.status>=400:
-                    if tt < retry-1:
-                        await asyncio.sleep(RETRY_WITHIN)
-                        continue
-                    raise Exception(response.status)
+                # if response.status>=400:
+                #     if tt < retry-1:
+                #         await asyncio.sleep(RETRY_WITHIN)
+                #         continue
+                #     raise Exception(response.status)
                 break
 
     return parser(body)
