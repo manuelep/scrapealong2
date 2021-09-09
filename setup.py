@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="scrapealong",
-    version="0.1.5",
+    version="0.1.6",
     author="Manuele Pesenti",
     author_email="manuele@inventati.org",
     description="Library for scraping data from web sites with async flavour",
